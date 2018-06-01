@@ -26,16 +26,17 @@ nox *= 6.022140857e17
 pres = datafile.pressure.where((datafile.latitude > -10) & (datafile.latitude < 10))
 temp = datafile.temperature.where((datafile.latitude > -10) & (datafile.latitude < 10))
 nox = (nox * temp * 1.3806503e-19 / pres) * 1e6  # ppmv
+nox = nox.resample('MS', dim='time', how='mean')
 
 pres = pres.mean(dim='time')
-nox = nox.mean(dim='time').values
+nox_avr = nox.mean(dim='time').values
 
 # Load HNO3
 datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_HNO3_monthlymeans/MLS-HNO3-*.nc')
 datafile = datafile.sel(Time=slice('20050101', '20051231'))
 mls_levels = datafile.Pressure.mean('Time')
 hno3 = datafile.HNO3.where((datafile.Latitude > -10) & (datafile.Latitude < 10)) * 1e6
-hno3 = hno3.mean(dim='Time').values
+hno3_avr = hno3.mean(dim='Time').values
 
 
 heights_index = []
@@ -43,26 +44,31 @@ for i in mls_levels[7:15]:
     n = find_nearest(pres, i)
     heights_index.append(int(n.values))  # (nox["altitude"].values[n])
 
+print(np.shape(hno3))
 
-print(hno3[7:15])
-print(nox[heights_index])
+noy_avr = hno3_avr[7:15] + nox_avr[heights_index]
 
-noy = hno3[7:15] + nox[heights_index]
-print(noy)
+# time by height
+noy_time = np.zeros((12, 8))
+for i in range(12):
+    print(i)
+    noy_time[i, :] = hno3.values[i, 7:15] + nox.values[i, heights_index]
+
 
 sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
-# plt.semilogy(nox["altitude"], pres, '-o')
 
-plt.loglog(noy, mls_levels.values[7:15])
-plt.loglog(hno3[7:15], mls_levels.values[7:15])
-plt.loglog(nox[heights_index], mls_levels.values[7:15])
+plt.imshow(noy_time, aspect='auto')
+
+#plt.loglog(noy_avr, mls_levels.values[7:15])
+#plt.loglog(hno3_avr[7:15], mls_levels.values[7:15])
+#plt.loglog(nox_avr[heights_index], mls_levels.values[7:15])
 
 #for i in mls_levels:
 #    plt.semilogy([10, 60], [i, i], '-k', linewidth=0.5)
 
-plt.ylim([4, 70])
-plt.xlabel("VMR [ppbv]")
-plt.ylabel("pressure [hPa]")
-plt.gca().invert_yaxis()
+#lt.ylim([4, 70])
+#plt.xlabel("VMR [ppbv]")
+#plt.ylabel("pressure [hPa]")
+#plt.gca().invert_yaxis()
 plt.show()
 

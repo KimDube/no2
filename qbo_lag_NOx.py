@@ -1,5 +1,5 @@
 ###
-# Plot the average ozone anomaly as lag from QBO onset
+# Plot the average NOx anomaly as lag from QBO onset
 ###
 
 import numpy as np
@@ -31,7 +31,7 @@ for i in range(len(w1.time)):
         wavr[j, i] = np.mean([w1.values[j, i], w2.values[j, i], w3.values[j, i], w4.values[j, i]])
 
 
-# load and filter ozone data
+# load and filter NOx data
 datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
 datafile = datafile.swap_dims({'profile_id': 'time'}, inplace=True)
 datafile = datafile.sel(time=slice('20050101', '20141231'))

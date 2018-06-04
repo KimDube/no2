@@ -1,13 +1,11 @@
-###
-# Correlate NOy=NOx+HNO3 and O3
-###
 
+import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
-import xarray as xr
-from scipy.stats.stats import pearsonr
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
 
 
 def find_nearest(array, value):
@@ -57,75 +55,69 @@ if __name__ == "__main__":
     times_nox = anomalies_nox.time.values
     alts_nox = anomalies_nox.altitude.values
 
-    # Load HNO3
-    datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_HNO3_monthlymeans/MLS-HNO3-*.nc')
+    # Load N2O
+    datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_N2O_monthlymeans/MLS-N2O-*.nc')
     datafile = datafile.sel(Time=slice('20050101', '20141231'))
-    nox = datafile.HNO3.where((datafile.Latitude > -10) & (datafile.Latitude < 10))
+    nox = datafile.N2O.where((datafile.Latitude > -5) & (datafile.Latitude < 5))
     monthlymeans = nox.groupby('Time.month').mean('Time')
-    anomalies_hno3 = nox.groupby('Time.month') - monthlymeans
-    anomalies_hno3['nLevels'] = datafile.Pressure.mean('Time')
-    anomalies_hno3 *= 1e9  # ppbv
+    anomalies_n2o = nox.groupby('Time.month') - monthlymeans
+    anomalies_n2o['nLevels'] = datafile.Pressure.mean('Time')
+    anomalies_n2o *= 1e9  # ppbv
+    anomalies_n2o = anomalies_n2o[:, 7:15]
 
-    # Calculate NOy = HNO3 + NOx
+    pressure_levels = datafile.Pressure.mean('Time')
+    pressure_levels = pressure_levels[7:15]
+
     nox_pres = pres.mean(dim='time')
-    mls_levels = datafile.Pressure.mean('Time')
     heights_index = []
-    for i in mls_levels[7:15]:
+    for i in pressure_levels:
         n = find_nearest(nox_pres, i)
         heights_index.append(int(n.values))
 
-    anomalies_noy = np.zeros((np.shape(anomalies_nox)[0], len(mls_levels[7:15])))
-    for i in range(np.shape(anomalies_nox)[0]):
-        anomalies_noy[i, :] = anomalies_hno3.values[i, 7:15] + anomalies_nox.values[i, heights_index]
+    anomalies_nox_pres = anomalies_nox[:, heights_index]
 
-    # Load O3
-    datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/CCI/OSIRIS_v5_10/*.nc')
-    datafile = datafile.sel(time=slice('20050101', '20141231'))
-    o3 = datafile.ozone_concentration.where((datafile.latitude > -10) & (datafile.latitude < 10))
-    # To convert concentration to number density [mol/m^3 to molecule/cm^3]
-    o3 *= 6.022140857e17
-    # To convert number density to vmr
-    pres = datafile.pressure.where((datafile.latitude > -10) & (datafile.latitude < 10))
-    temp = datafile.temperature.where((datafile.latitude > -10) & (datafile.latitude < 10))
-    o3 = (o3 * temp * 1.3806503e-19 / pres) * 1e6  # ppmv
-    o3 = o3.resample('MS', dim='time', how='mean')
-    monthlymeans = o3.groupby('time.month').mean('time')
-    anomalies_o3 = o3.groupby('time.month') - monthlymeans
-    times_o3 = anomalies_o3.time.values
-    alts_o3 = anomalies_o3.altitude.values
-    anomalies_o3 = anomalies_o3.values
+    # anomalies_nox_pres = anomalies_nox_pres.transpose()
+    # Interpolate missing values
+    anomalies_n2o = linearinterp(anomalies_n2o, pressure_levels)
+    anomalies_nox_pres = linearinterp(anomalies_nox_pres, pressure_levels)
 
-    # Interpolate missing values, otherwise correlation won't work
-    anomalies_noy = linearinterp(anomalies_noy, mls_levels.values[7:15])
-    anomalies_o3 = linearinterp(anomalies_o3, mls_levels.values[7:15])
+    anomalies_n2o = anomalies_n2o[0:-3, :]
 
-    # Calculate corr coeff for each pressure level
-    cc = np.zeros(len(heights_index))
-    k = 0
-    for i in heights_index:
-        # Standardize so result is between -1 and 1
-        anomalies_o3[:, i] = (anomalies_o3[:, i] - np.nanmean(anomalies_o3[:, i])) / np.nanstd(anomalies_o3[:, i])
-        anomalies_noy[:, k] = (anomalies_noy[:, k] - np.nanmean(anomalies_noy[:, k])) / np.nanstd(anomalies_noy[:, k])
-        cc[k], p = pearsonr(anomalies_noy[:, k], anomalies_o3[:, i])
-        k += 1
+    reg_coeff = np.zeros(len(pressure_levels))
+    sigma = np.zeros(len(pressure_levels))
+    for i in range(len(pressure_levels)):
+        n2o_i = anomalies_n2o[:, i].reshape((120, 1))
+        nox_i = anomalies_nox_pres[:, i].reshape((120, 1))
 
-    # Plot
+        lm = LinearRegression()
+        lm.fit(n2o_i, nox_i)
+        y_pred = lm.predict(n2o_i)
+        # print(lm.coef_)
+        reg_coeff[i] = lm.coef_[0]
+
+        mse = mean_squared_error(nox_i, y_pred)
+        sigma[i] = np.sqrt(mse)
+        # print(r2_score(anomalies_nox_pres[:, i], y_pred))
+
     sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
     colours = ['magenta', 'tangerine', 'medium green']
     sns.set_palette(sns.xkcd_palette(colours))
     fig, ax = plt.subplots(figsize=(8, 8))
     plt.plot([0, 0], [4, 73], sns.xkcd_rgb["charcoal grey"])
-    plt.semilogy(cc, mls_levels.values[7:15], '-o')
+    plt.semilogy(reg_coeff, pressure_levels, '-o')
+    # plt.errorbar(reg_coeff, pressure_levels, xerr=sigma)
     plt.ylabel('Pressure [hPa]')
-    plt.xlabel('Correlation Coefficient')
-    plt.xlim([-1, 1])
+    plt.xlabel('Regression Coefficient (HNO3/N2O)')
+    plt.xlim([-0.06, 0.02])
     plt.ylim([4, 73])
     from matplotlib.ticker import ScalarFormatter
+
     ax.yaxis.set_major_formatter(ScalarFormatter())
     ax.yaxis.set_major_locator(plt.FixedLocator([4.6, 6.8, 10.0, 14.7, 21.5, 31.6, 46.4, 68.1]))
     plt.gca().invert_yaxis()
     ax.grid(True, which="major", ls="-", axis="y")
-    plt.title('OSIRIS O3 vs. NOy=OSIRIS NOx + MLS HNO3')
+    plt.title('MLS NOx/N2O')
     plt.tight_layout()
-    plt.savefig("/home/kimberlee/Masters/NO2/Figures/corr_O3_NOx.png", format='png', dpi=150)
+    plt.savefig("/home/kimberlee/Masters/NO2/Figures/regression_NOx_N2O.png", format='png', dpi=150)
     plt.show()
+

@@ -31,7 +31,7 @@ anomalies_hno3 = anomalies_hno3.sel(nLevels=11)  # 10 hPa
 dataf = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
 dataf = dataf.swap_dims({'profile_id': 'time'}, inplace=True)
 dataf = dataf.sel(time=slice('20050101', '20141231'))
-nox = dataf.derived_0630_NOx_concentration.where((dataf.latitude > -10) & (dataf.latitude < 10))
+nox = dataf.derived_daily_mean_NOx_concentration.where((dataf.latitude > -10) & (dataf.latitude < 10))
 nox = nox.sel(altitude=26.5)
 # To convert concentration to number density [mol/m^3 to molecule/cm^3]
 nox *= 6.022140857e17

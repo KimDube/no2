@@ -29,6 +29,6 @@ print(da)
 
 sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
 fig, ax = plt.subplots(figsize=(10, 5))
-fax = plt.contourf(da.time.values, da.altitude.values, da, robust=True, cmap="RdBu_r", extend='both', add_colorbar=0)
+fax = plt.contourf(da['time'], da['altitude'], da, robust=True, cmap="RdBu_r", extend='both', add_colorbar=0)
 
 plt.show()

@@ -57,7 +57,7 @@ for i in range(12):
 
 sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
 
-plt.imshow(noy_time, aspect='auto')
+# plt.imshow(noy_time, aspect='auto')
 
 #plt.loglog(noy_avr, mls_levels.values[7:15])
 #plt.loglog(hno3_avr[7:15], mls_levels.values[7:15])

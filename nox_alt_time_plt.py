@@ -27,7 +27,7 @@ if __name__ == "__main__":
     datafile = datafile.swap_dims({'profile_id': 'time'}, inplace=True)
     datafile = datafile.sel(time=slice('20050101', '20141231'))
 
-    nox = datafile.derived_0630_NOx_concentration.where((datafile.latitude > -5) & (datafile.latitude < 5))
+    nox = datafile.derived_daily_mean_NOx_concentration.where((datafile.latitude > -5) & (datafile.latitude < 5))
     # To convert concentration to number density [mol/m^3 to molecule/cm^3]
     nox *= 6.022140857e17
     # To convert number density to vmr
@@ -41,14 +41,14 @@ if __name__ == "__main__":
 
     sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
     fig, ax = plt.subplots(figsize=(10, 5))
-    fax = anomalies.plot.contourf(x='time', y='altitude', robust=True, levels=np.arange(-3, 3, 0.2),
+    fax = anomalies.plot.contourf(x='time', y='altitude', robust=True, levels=np.arange(-3.5, 3.5, 0.2),
                                   cmap="RdBu_r", extend='both', add_colorbar=0)
     im2 = winds.plot.contour(x='time', y='heights', levels=8, extend='both', cmap='gray')
     plt.clabel(im2, inline=1, fontsize=8)
-    plt.ylim([15, 40])
+    plt.ylim([15, 38])
     plt.ylabel('Altitude [km]')
     plt.xlabel('')
-    plt.title('Monthly Mean OSIRIS NO$\mathregular{_x}$ @ 6:30 (-5 to 5 deg. lat.)')
+    plt.title('Monthly Mean OSIRIS NO$\mathregular{_x}$ (-5 to 5 deg. lat.)')
     sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
     cb = fig.colorbar(fax, orientation='horizontal', fraction=0.2, aspect=50)
     cb.set_label("NO$\mathregular{_x}$ Anomaly VMR [ppbv]")

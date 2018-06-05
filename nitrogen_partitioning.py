@@ -5,18 +5,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import xarray as xr
-import numpy as np
-
-
-def find_nearest(array, value):
-    """
-    Find location of array element closest to value
-    :param array: array to search
-    :param value: number to find
-    :return: index corresponding to closest element of array to value
-    """
-    index = (np.abs(array-value)).argmin()
-    return index
+from NO2 import alt_to_pres
 
 
 if __name__ == "__main__":
@@ -67,15 +56,12 @@ if __name__ == "__main__":
     hno3 = hno3.resample('YS', dim='Time', how='mean')
     avr_hno3 = hno3.mean(dim="Time")
 
-    # Calculate NOy = HNO3 + NOx
+    # Calculate NOy = HNO3 + NOx. Need NOx on pressure levels
     nox_pres = pres.mean(dim='time')
-    mls_levels = datafile.Pressure.mean('Time')
-    heights_index = []
-    for i in mls_levels[5:17]:
-        n = find_nearest(nox_pres, i)
-        heights_index.append(int(n.values))  # (nox["altitude"].values[n])
-
-    noy = avr_hno3[5:17].values + avr_nox[heights_index].values
+    avr_nox_plevels, mls_levels = alt_to_pres.interpolate_to_mls_pressure(nox_pres, avr_nox)
+    # "Magic numbers" 5:16 correspond to pressure levels where MLS data is good and OSIRIS data exists.
+    # Approx 146 to 3 hPa.
+    noy = avr_hno3[5:16].values + avr_nox_plevels
 
     # Plot
     sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
@@ -87,7 +73,7 @@ if __name__ == "__main__":
     ax2 = ax.twinx()
     l4 = ax2.loglog(avr_n2o, avr_n2o.nLevels, sns.xkcd_rgb["azure"], marker='D', label="N$\mathregular{_2}$O")
     l5 = ax2.loglog(avr_hno3, avr_hno3.nLevels, sns.xkcd_rgb["bright orange"], marker='D', label="HNO$\mathregular{_3}$")
-    l6 = ax2.loglog(noy, mls_levels.values[5:17], sns.xkcd_rgb["light purple"], marker='D', label="NO$\mathregular{_y}$")
+    l6 = ax2.loglog(noy, mls_levels, sns.xkcd_rgb["light purple"], marker='D', label="NO$\mathregular{_y}$")
     ax.set_ylim([15, 40])
     ax2.set_ylim([3, 120])
     ax2.set_ylim(ax2.get_ylim()[::-1])

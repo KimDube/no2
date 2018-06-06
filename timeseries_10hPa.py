@@ -115,6 +115,6 @@ if __name__ == "__main__":
     ax2.set_ylim([-2.0, 2.0])
     ax3.set_ylim([-40, 40])
     plt.tight_layout(rect=[0, 0, 1, 0.98], h_pad=2.0)
-    plt.savefig("/home/kimberlee/Masters/NO2/Figures/timeseries_10hPa_32km.png", format='png', dpi=150)
+    # plt.savefig("/home/kimberlee/Masters/NO2/Figures/timeseries_10hPa_32km.png", format='png', dpi=150)
     plt.show()
 

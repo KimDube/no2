@@ -35,7 +35,7 @@ for i in range(len(w1.time)):
 datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
 datafile = datafile.swap_dims({'profile_id': 'time'}, inplace=True)
 datafile = datafile.sel(time=slice('20050101', '20141231'))
-nox = datafile.derived_0630_NOx_concentration.where((datafile.latitude > -5) & (datafile.latitude < 5))
+nox = datafile.derived_daily_mean_NOx_concentration.where((datafile.latitude > -5) & (datafile.latitude < 5))
 # To convert concentration to number density [mol/m^3 to molecule/cm^3]
 nox *= 6.022140857e17
 # To convert number density to vmr
@@ -59,7 +59,7 @@ for i in range(32):
 
 sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
 fig, ax = plt.subplots(figsize=(8, 8))
-im = plt.contourf(np.arange(-10, 22), anomalies.altitude, wavr_oz.transpose(), np.arange(-0.8, 0.81, 0.05),
+im = plt.contourf(np.arange(-10, 22), anomalies.altitude, wavr_oz.transpose(), np.arange(-1.8, 1.81, 0.05),
                   extend='both', cmap='RdBu_r')
 im2 = plt.contour(np.arange(-10, 22), heights_m, (wavr*0.1), 8, extend='both', colors='black')
 plt.plot([0, 0], [anomalies.altitude[0], anomalies.altitude[-1]], 'k-')

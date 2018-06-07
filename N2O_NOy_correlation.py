@@ -105,5 +105,5 @@ if __name__ == "__main__":
     ax.grid(True, which="major", ls="-", axis="y")
     plt.title('MLS N2O vs. NOy=OSIRIS NOx + MLS HNO3')
     plt.tight_layout()
-    plt.savefig("/home/kimberlee/Masters/NO2/Figures/corr_N2O_NOx.png", format='png', dpi=150)
+    plt.savefig("/home/kimberlee/Masters/NO2/Figures/corr_N2O_NOy.png", format='png', dpi=150)
     plt.show()

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
-from NO2 import alt_to_pres
+from NO2 import alt_to_pres, open_data
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 
@@ -26,18 +26,8 @@ def linearinterp(arr, altrange):
 
 if __name__ == "__main__":
     # Load daily NOx
-    dataf = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
-    dataf = dataf.swap_dims({'profile_id': 'time'}, inplace=True)
-    dataf = dataf.sel(time=slice('20050101', '20141231'))
-    nox = dataf.derived_daily_mean_NOx_concentration.where((dataf.latitude > -10) & (dataf.latitude < 10))
-    # To convert concentration to number density [mol/m^3 to molecule/cm^3]
-    nox *= 6.022140857e17
-    # To convert number density to vmr
-    pres = dataf.pressure.where((dataf.latitude > -10) & (dataf.latitude < 10))
-    temp = dataf.temperature.where((dataf.latitude > -10) & (dataf.latitude < 10))
-    nox = (nox * temp * 1.3806503e-19 / pres) * 1e9  # ppbv
-    nox = nox.resample('MS', dim='time', how='mean')  # take monthly mean
-    pres_nox = pres.resample('MS', dim='time', how='mean')
+    nox, pres_nox = open_data.load_osiris_nox_monthly(start_date='20050101', end_date='20141231',
+                                                      min_lat=-10, max_lat=10, pressure=1)
 
     # Load N2O
     datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_N2O_monthlymeans/MLS-N2O-*.nc')

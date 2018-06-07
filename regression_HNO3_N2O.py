@@ -3,27 +3,9 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
-
-
-def linearinterp(arr, altrange):
-    """
-    :param arr: 2d array with dimensions [alt, time]
-    :param altrange: array of altitudes corresponding to alt dimension of arr
-    :return: copy of input arr that has missing values filled in
-            by linear interpolation (over each altitude)
-    """
-    times = arr['Time']
-    levels = arr['nLevels']
-    arrinterp = np.zeros(np.shape(arr))
-    for i in range(len(altrange)):
-        y = pd.Series(arr[:, i])
-        yn = y.interpolate(method='linear')
-        arrinterp[:, i] = yn
-    new_arr = xr.DataArray(arrinterp, coords=[times, levels], dims=['Time', 'nLevels'])
-    return new_arr
+from NO2 import helper_functions
 
 
 if __name__ == "__main__":
@@ -35,24 +17,24 @@ if __name__ == "__main__":
     anomalies_hno3 = nox.groupby('Time.month') - monthlymeans
     anomalies_hno3['nLevels'] = datafile.Pressure.mean('Time')
     anomalies_hno3 *= 1e9  # ppbv
-    anomalies_hno3 = anomalies_hno3[:, 7:15]
+    anomalies_hno3 = anomalies_hno3[:, 5:15]
 
     pressure_levels = datafile.Pressure.mean('Time')
-    pressure_levels = pressure_levels[7:15]
+    pressure_levels = pressure_levels[5:15]
 
     # Load N2O
     datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_N2O_monthlymeans/MLS-N2O-*.nc')
     datafile = datafile.sel(Time=slice('20050101', '20141231'))
-    nox = datafile.N2O.where((datafile.Latitude > -5) & (datafile.Latitude < 5))
+    nox = datafile.N2O.where((datafile.Latitude > -10) & (datafile.Latitude < 10))
     monthlymeans = nox.groupby('Time.month').mean('Time')
     anomalies_n2o = nox.groupby('Time.month') - monthlymeans
     anomalies_n2o['nLevels'] = datafile.Pressure.mean('Time')
     anomalies_n2o *= 1e9  # ppbv
-    anomalies_n2o = anomalies_n2o[:, 7:15]
+    anomalies_n2o = anomalies_n2o[:, 5:15]
 
     # Interpolate missing values
-    anomalies_n2o = linearinterp(anomalies_n2o, pressure_levels)
-    anomalies_hno3 = linearinterp(anomalies_hno3, pressure_levels)
+    anomalies_n2o = helper_functions.linearinterp(anomalies_n2o, pressure_levels)
+    anomalies_hno3 = helper_functions.linearinterp(anomalies_hno3, pressure_levels)
 
     reg_coeff = np.zeros(len(pressure_levels))
     sigma = np.zeros(len(pressure_levels))

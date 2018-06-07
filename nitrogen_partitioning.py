@@ -5,7 +5,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import xarray as xr
-from NO2 import alt_to_pres
+from NO2 import helper_functions
 
 
 if __name__ == "__main__":
@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
     # Calculate NOy = HNO3 + NOx. Need NOx on pressure levels
     nox_pres = pres.mean(dim='time')
-    avr_nox_plevels, mls_levels = alt_to_pres.interpolate_to_mls_pressure(nox_pres, avr_nox)
+    avr_nox_plevels, mls_levels = helper_functions.interpolate_to_mls_pressure(nox_pres, avr_nox)
     # "Magic numbers" 5:16 correspond to pressure levels where MLS data is good and OSIRIS data exists.
     # Approx 146 to 3 hPa.
     noy = avr_hno3[5:16].values + avr_nox_plevels

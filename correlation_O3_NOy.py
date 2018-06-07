@@ -7,39 +7,13 @@ import seaborn as sns
 import xarray as xr
 from scipy.stats.stats import pearsonr
 import numpy as np
-import pandas as pd
-from NO2 import alt_to_pres
-
-
-def linearinterp(arr, altrange):
-    """
-    :param arr: 2d array with dimensions [alt, time]
-    :param altrange: array of altitudes corresponding to alt dimension of arr
-    :return: copy of input arr that has missing values filled in
-            by linear interpolation (over each altitude)
-    """
-    arrinterp = np.zeros(np.shape(arr))
-    for i in range(len(altrange)):
-        y = pd.Series(arr[:, i])
-        yn = y.interpolate(method='linear')
-        arrinterp[:, i] = yn
-    return arrinterp
+from NO2 import helper_functions, open_data
 
 
 if __name__ == "__main__":
     # Load daily NOx
-    dataf = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
-    dataf = dataf.swap_dims({'profile_id': 'time'}, inplace=True)
-    dataf = dataf.sel(time=slice('20050101', '20141231'))
-    nox = dataf.derived_daily_mean_NOx_concentration.where((dataf.latitude > -10) & (dataf.latitude < 10))
-    # To convert concentration to number density [mol/m^3 to molecule/cm^3]
-    nox *= 6.022140857e17
-    # To convert number density to vmr
-    pres = dataf.pressure.where((dataf.latitude > -10) & (dataf.latitude < 10))
-    temp = dataf.temperature.where((dataf.latitude > -10) & (dataf.latitude < 10))
-    nox = (nox * temp * 1.3806503e-19 / pres) * 1e9  # ppbv
-    nox = nox.resample('MS', dim='time', how='mean')  # take monthly mean
-    pres_nox = pres.resample('MS', dim='time', how='mean')
+    nox, pres_nox = open_data.load_osiris_nox_monthly(start_date='20050101', end_date='20141231',
+                                                      min_lat=-10, max_lat=10, pressure=1)
 
     # Load monthly mean HNO3
     datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_HNO3_monthlymeans/MLS-HNO3-*.nc')
@@ -52,7 +26,7 @@ if __name__ == "__main__":
     nox_on_pres_levels = np.zeros((len(nox.time), 10))  # alt_to_pres returns 10 pressure levels
     mls_levels = []
     for i in range(len(nox.time)):
-        nox_on_pres_levels[i, :], l = alt_to_pres.interpolate_to_mls_pressure(pres_nox[i, :], nox[i, :])
+        nox_on_pres_levels[i, :], l = helper_functions.interpolate_to_mls_pressure(pres_nox[i, :], nox[i, :])
         mls_levels = l
 
     # Calculate NOy = HNO3 + NOx
@@ -66,22 +40,13 @@ if __name__ == "__main__":
     anomalies_noy = noy_dataset.groupby('Time.month') - monthlymeans
 
     # Load O3
-    datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/CCI/OSIRIS_v5_10/*.nc')
-    datafile = datafile.sel(time=slice('20050101', '20141231'))
-    o3 = datafile.ozone_concentration.where((datafile.latitude > -10) & (datafile.latitude < 10))
-    # To convert concentration to number density [mol/m^3 to molecule/cm^3]
-    o3 *= 6.022140857e17
-    # To convert number density to vmr
-    pres = datafile.pressure.where((datafile.latitude > -10) & (datafile.latitude < 10))
-    temp = datafile.temperature.where((datafile.latitude > -10) & (datafile.latitude < 10))
-    o3 = (o3 * temp * 1.3806503e-19 / pres) * 1e6  # ppmv
-    o3 = o3.resample('MS', dim='time', how='mean')
-    pres_o3 = pres.resample('MS', dim='time', how='mean')
+    o3, pres_o3 = open_data.load_osiris_ozone_monthly(start_date='20050101', end_date='20141231',
+                                                      min_lat=-10, max_lat=10, pressure=1)
 
     # Put O3 on MLS pressure levels to match HNO3
     o3_on_pres_levels = np.zeros((len(o3.time), 10))  # alt_to_pres returns 10 pressure levels
     for i in range(len(o3.time)):
-        o3_on_pres_levels[i, :], l = alt_to_pres.interpolate_to_mls_pressure(pres_o3[i, :], o3[i, :])
+        o3_on_pres_levels[i, :], l = helper_functions.interpolate_to_mls_pressure(pres_o3[i, :], o3[i, :])
 
     # Calculate NOy = HNO3 + NOx
     o3_dataset = xr.DataArray(o3_on_pres_levels, coords=[o3.time, mls_levels], dims=["Time", "nLevels"])
@@ -89,8 +54,8 @@ if __name__ == "__main__":
     anomalies_o3 = o3_dataset.groupby('Time.month') - monthlymeans
 
     # Interpolate missing values, otherwise correlation won't work
-    anomalies_noy = linearinterp(anomalies_noy, mls_levels)
-    anomalies_o3 = linearinterp(anomalies_o3, mls_levels)
+    anomalies_noy = helper_functions.linearinterp(anomalies_noy, mls_levels)
+    anomalies_o3 = helper_functions.linearinterp(anomalies_o3, mls_levels)
 
     # Calculate corr coeff for each pressure level
     cc = np.zeros(len(mls_levels))

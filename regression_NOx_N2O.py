@@ -3,25 +3,9 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import pandas as pd
-from NO2 import alt_to_pres, open_data
+from NO2 import helper_functions, open_data
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
-
-
-def linearinterp(arr, altrange):
-    """
-    :param arr: 2d array with dimensions [alt, time]
-    :param altrange: array of altitudes corresponding to alt dimension of arr
-    :return: copy of input arr that has missing values filled in
-            by linear interpolation (over each altitude)
-    """
-    arrinterp = np.zeros(np.shape(arr))
-    for i in range(len(altrange)):
-        y = pd.Series(arr[:, i])
-        yn = y.interpolate(method='linear')
-        arrinterp[:, i] = yn
-    return arrinterp
 
 
 if __name__ == "__main__":
@@ -32,7 +16,7 @@ if __name__ == "__main__":
     # Load N2O
     datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_N2O_monthlymeans/MLS-N2O-*.nc')
     datafile = datafile.sel(Time=slice('20050101', '20141231'))
-    no2 = datafile.N2O.where((datafile.Latitude > -5) & (datafile.Latitude < 5))
+    no2 = datafile.N2O.where((datafile.Latitude > -10) & (datafile.Latitude < 10))
     monthlymeans = no2.groupby('Time.month').mean('Time')
     anomalies_n2o = no2.groupby('Time.month') - monthlymeans
     anomalies_n2o['nLevels'] = datafile.Pressure.mean('Time')
@@ -43,7 +27,7 @@ if __name__ == "__main__":
     nox_on_pres_levels = np.zeros((len(nox.time), 10))  # alt_to_pres returns 10 pressure levels
     mls_levels = []
     for i in range(len(nox.time)):
-        nox_on_pres_levels[i, :], l = alt_to_pres.interpolate_to_mls_pressure(pres_nox[i, :], nox[i, :])
+        nox_on_pres_levels[i, :], l = helper_functions.interpolate_to_mls_pressure(pres_nox[i, :], nox[i, :])
         mls_levels = l
 
     nox_dataset = xr.DataArray(nox_on_pres_levels, coords=[nox.time, mls_levels], dims=["Time", "nLevels"])
@@ -51,8 +35,8 @@ if __name__ == "__main__":
     anomalies_nox = nox_dataset.groupby('Time.month') - monthlymeans
 
     # Interpolate missing values so regression works
-    anomalies_n2o = linearinterp(anomalies_n2o, mls_levels)
-    anomalies_nox = linearinterp(anomalies_nox, mls_levels)
+    anomalies_n2o = helper_functions.linearinterp(anomalies_n2o, mls_levels)
+    anomalies_nox = helper_functions.linearinterp(anomalies_nox, mls_levels)
 
     anomalies_n2o = anomalies_n2o[0:-3, :]
 

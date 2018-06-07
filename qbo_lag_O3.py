@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import xarray as xr
 import pandas as pd
+from NO2 import open_data
 
 
 # load wind data
@@ -32,16 +33,7 @@ for i in range(len(w1.time)):
 
 
 # load and filter ozone data
-datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/CCI/OSIRIS_v5_10/*.nc')
-datafile = datafile.sel(time=slice('20050101', '20141231'))
-datafile = datafile.where((datafile.latitude > -5) & (datafile.latitude < 5))
-
-o3 = datafile.ozone_concentration
-# To convert concentration to number density [mol/m^3 to molecule/cm^3]
-o3 *= 6.022140857e17
-# To convert number density to vmr
-o3 = (o3 * datafile.temperature * 1.3806503e-19 / datafile.pressure) * 1e6  # ppmv
-o3 = o3.resample('MS', dim='time', how='mean')
+o3 = open_data.load_osiris_ozone_monthly(start_date='20050101', end_date='20141231', min_lat=-5, max_lat=5)
 monthlymeans = o3.groupby('time.month').mean('time')
 anomalies = o3.groupby('time.month') - monthlymeans
 

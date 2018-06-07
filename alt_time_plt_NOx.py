@@ -1,5 +1,5 @@
 ###
-# NOx time series
+# Plot NOx time series as function of altitude with singapore wind contours
 ###
 
 import numpy as np

@@ -1,5 +1,5 @@
 ###
-# N2O time series
+# Plot N2O time series as function of altitude with singapore wind contours
 ###
 
 import numpy as np
@@ -24,9 +24,7 @@ if __name__ == "__main__":
     # Load N2O
     datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_N2O_monthlymeans/MLS-N2O-*.nc')
     datafile = datafile.sel(Time=slice('20050101', '20141231'))
-
     nox = datafile.N2O.where((datafile.Latitude > -5) & (datafile.Latitude < 5))
-
     monthlymeans = nox.groupby('Time.month').mean('Time')
     anomalies = nox.groupby('Time.month') - monthlymeans
 

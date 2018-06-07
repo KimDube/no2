@@ -7,17 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 import seaborn as sns
-
-
-def find_nearest(array, value):
-    """
-    Find location of array element closest to value
-    :param array: array to search
-    :param value: number to find
-    :return: index corresponding to closest element of array to value
-    """
-    index = (np.abs(array-value)).argmin()
-    return index
+from NO2 import helper_functions
 
 
 heights = np.array([10, 12, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100])
@@ -28,7 +18,7 @@ pres = t[:, 1]
 
 heights_m = []
 for i in heights:
-    n = find_nearest(pres, i)
+    n = helper_functions.find_nearest(pres, i)
     heights_m.append(alts[n])
 
 heights_m = np.array(heights_m)

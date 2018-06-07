@@ -3,8 +3,6 @@ Open data
 """
 
 import xarray as xr
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 
 # # # # # #
@@ -72,21 +70,22 @@ def load_osiris_ozone_monthly(start_date='20050101', end_date='20141231', min_la
 # MLS #
 # # # #
 
-def read_mls_hno3(time='2005d0*', min_lat=-10, max_lat=10):
+def read_mls_hno3(year='2005', day='0*', min_lat=-10, max_lat=10):
     """
     Load several days of MLS HNO3 data...files are large. A better computer might be able to handle a year.
      Filter to input latitude band, remove low quality data (re. MLS documentation).
      **** Monthly mean is not calculated cause full months are not necessarily loaded. ***
-    :param time: string. Default is '2005d0*' which loads data for days 1 to 99 of 2005.
+    :param year: string. Default is '2005'.
+    :param day: string. Default is '0*'  which loads data for days 1 to 99 of year.
     :param min_lat: minimum latitude to include in means. Default is -10.
     :param max_lat: maximum latitude to include in means. Default is 10.
     :return: Save a new netcdf file that is smaller and quicker to load.
     """
     hno3 = xr.open_mfdataset(
-        r'/home/kimberlee/ValhallaData/MLS/L2HNO3-v04-23/MLS-Aura_L2GP-HNO3_v04-20-c01_%s.he5' % time,
+        r'/home/kimberlee/ValhallaData/MLS/L2HNO3-v04-23/MLS-Aura_L2GP-HNO3_v04-20-c01_%sd%s.he5' % (year, day),
         group='HDFEOS/SWATHS/HNO3/Data Fields/', concat_dim='nTimes')
     geo = xr.open_mfdataset(
-        r'/home/kimberlee/ValhallaData/MLS/L2HNO3-v04-23/MLS-Aura_L2GP-HNO3_v04-20-c01_%s.he5' % time,
+        r'/home/kimberlee/ValhallaData/MLS/L2HNO3-v04-23/MLS-Aura_L2GP-HNO3_v04-20-c01_%sd%s.he5' % (year, day),
         group='HDFEOS/SWATHS/HNO3/Geolocation Fields/', concat_dim='nTimes')
 
     mls = xr.merge([hno3, geo])
@@ -109,7 +108,26 @@ def read_mls_hno3(time='2005d0*', min_lat=-10, max_lat=10):
 
     mls = xr.merge([mls_u, mls_l])
 
-    mls.to_netcdf(path='/home/kimberlee/Masters/NO2/MLS_HNO3_monthlymeans/quarters/MLS-HNO3-2014-0.nc', mode='w')
+    mls.to_netcdf(path='/home/kimberlee/Masters/NO2/MLS_HNO3_monthlymeans/quarters/MLS-HNO3-%s-%s.nc' %
+                       (year, day), mode='w')
+    return
+
+
+def combine_mls(year='2005', dataset='HNO3'):
+    """
+    Merge together a year of MLS HNO3 or O3 files (ideally from read_mls_(hn)o3 otherwise they will be too big to save)
+    :param year: String. Default is '2005'. Combine files with this year in the extension and take monthly mean.
+    :param dataset: String. Either 'HNO3' (default) or 'O3', otherwise the files won't be found.
+    :return: Save new file with monthly means from input year.
+    """
+    if (dataset != 'HNO3') or (dataset != 'O3'):
+        print('Dataset must be one of [HNO3, O3]')
+        return
+    datafile = xr.open_mfdataset('/home/kimberlee/Masters/NO2/MLS_%s_monthlymeans/quarters/MLS-%s-%s-*.nc' %
+                                 (dataset, dataset, year))
+    mls = datafile.resample('MS', dim='Time', how='mean')
+    mls.to_netcdf(path='/home/kimberlee/Masters/NO2/MLS_%s_monthlymeans/MLS-%s-%s.nc' %
+                       (dataset, dataset, year), mode='w')
     return
 
 
@@ -146,27 +164,41 @@ def read_mls_n2o(year='2005', min_lat=-10, max_lat=10):
     return
 
 
-def load_mls_n2o_monthly():
+def read_mls_o3(year='2005', day='0*', min_lat=-10, max_lat=10):
+    """
+    Load several days of MLS O3 data...files are large. A better computer might be able to handle a year.
+     Filter to input latitude band, remove low quality data (re. MLS documentation).
+     **** Monthly mean is not calculated cause full months are not necessarily loaded. ***
+    :param year: string. Default is '2005'.
+    :param day: string. Default is '0*'  which loads data for days 1 to 99 of year.
+    :param min_lat: minimum latitude to include in means. Default is -10.
+    :param max_lat: maximum latitude to include in means. Default is 10.
+    :return: Save a new netcdf file that is smaller and quicker to load.
+    """
+    o3 = xr.open_mfdataset(
+        r'/home/kimberlee/ValhallaData/MLS/L2O3v04-20/MLS-Aura_L2GP-O3_v04-20-c01_%sd%s.he5' % (year, day),
+        group='HDFEOS/SWATHS/O3/Data Fields/', concat_dim='nTimes')
+    geo = xr.open_mfdataset(
+        r'/home/kimberlee/ValhallaData/MLS/L2O3v04-20/MLS-Aura_L2GP-O3_v04-20-c01_%sd%s.he5' % (year, day),
+        group='HDFEOS/SWATHS/O3/Geolocation Fields/', concat_dim='nTimes')
 
-    return 0
+    mls = xr.merge([o3, geo])
+    mls = mls.drop(['AscDescMode', 'L2gpPrecision', 'L2gpValue', 'ChunkNumber', 'LineOfSightAngle', 'LocalSolarTime',
+                    'OrbitGeodeticAngle', 'SolarZenithAngle'])
+
+    mls.Time.attrs['units'] = 'Seconds since 01-01-1993'
+    mls = xr.decode_cf(mls)
+    mls = mls.swap_dims({'nTimes': 'Time'}, inplace=True)
+    mls = mls.dropna(dim="Time")
+    mls = mls.where((mls.Latitude > min_lat) & (mls.Latitude < max_lat))
+    mls = mls.where(((mls.Status % 2) == 0) & (mls.Quality > 1.0) & (mls.Convergence < 1.03) & (mls.O3Precision > 0))
+    mls = mls.resample('MS', dim='Time', how='mean')
+
+    mls.to_netcdf(path='/home/kimberlee/Masters/NO2/MLS_O3_monthlymeans/quarters/MLS-O3-%s-%s.nc' %
+                       (year, day), mode='w')
+    return
 
 
 if __name__ == "__main__":
-    """
-    read_mls_n2o('2014')
+    read_mls_n2o(year='2015', min_lat=-10, max_lat=10)
 
-    mls = xr.open_dataset('/home/kimberlee/Masters/NO2/MLS_N2O_monthlymeans/MLS-N2O-2014.nc')
-
-    sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
-    colours = ['purple']
-    sns.set_palette(sns.xkcd_palette(colours))
-    fig, ax = plt.subplots(figsize=(8, 8))
-    plt.title("Mean N2O - MLS")
-    plt.xlabel("N2O [VMR]")
-    plt.ylabel("Pressure [hPa]")
-    plt.semilogy(mls.N2O*1e9, mls.Pressure, 'o')
-    plt.ylim([0.46, 100])
-    plt.gca().invert_yaxis()
-    # plt.savefig("/home/kimberlee/Masters/NO2/Figures/MLS_N2O_profile.png", format='png', dpi=150)
-    plt.show()
-    """

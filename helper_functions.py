@@ -1,9 +1,6 @@
-"""
-Interpolate OSIRIS data from altitude to MLS pressure level
-"""
-
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -11,6 +8,12 @@ from scipy import interpolate
 
 
 def interpolate_to_mls_pressure(osiris_pressure, osiris_vmr):
+    """
+    Interpolate OSIRIS data from altitude to MLS pressure levels 5 to 15.
+    :param osiris_pressure: 1d OSIRIS pressures
+    :param osiris_vmr: Corresponding 1D OSIRIS VMR (NOx, O3, etc.)
+    :return: OSIRIS VMR on MLS levels, array of corresponding pressures
+    """
     mls_levels = np.load('/home/kimberlee/Masters/NO2/mls_pressure_levels.npy')
     # Interested in 100 to 5 hPa
     mls_levels = mls_levels[5:15]
@@ -25,6 +28,32 @@ def interpolate_to_mls_pressure(osiris_pressure, osiris_vmr):
     interp_nox = interpolate.interp1d(osiris_vmr.altitude, osiris_vmr)
     nox_on_mls_levels = interp_nox(mls_levels_alt)
     return nox_on_mls_levels, mls_levels
+
+
+def linearinterp(arr, altrange):
+    """
+    :param arr: 2d array with dimensions [alt, time]
+    :param altrange: array of altitudes corresponding to alt dimension of arr
+    :return: copy of input arr that has missing values filled in
+            by linear interpolation (over each altitude)
+    """
+    arrinterp = np.zeros(np.shape(arr))
+    for i in range(len(altrange)):
+        y = pd.Series(arr[:, i])
+        yn = y.interpolate(method='linear')
+        arrinterp[:, i] = yn
+    return arrinterp
+
+
+def find_nearest(array, value):
+    """
+    Find location of array element closest to value
+    :param array: array to search
+    :param value: number to find
+    :return: index corresponding to closest element of array to value
+    """
+    index = (np.abs(array-value)).argmin()
+    return index
 
 
 if __name__ == "__main__":

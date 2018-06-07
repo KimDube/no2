@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import xarray as xr
 import pandas as pd
+from NO2 import open_data
 
 
 # load wind data
@@ -31,19 +32,8 @@ for i in range(len(w1.time)):
         wavr[j, i] = np.mean([w1.values[j, i], w2.values[j, i], w3.values[j, i], w4.values[j, i]])
 
 
-# load and filter NOx data
-datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
-datafile = datafile.swap_dims({'profile_id': 'time'}, inplace=True)
-datafile = datafile.sel(time=slice('20050101', '20141231'))
-nox = datafile.derived_daily_mean_NOx_concentration.where((datafile.latitude > -5) & (datafile.latitude < 5))
-# To convert concentration to number density [mol/m^3 to molecule/cm^3]
-nox *= 6.022140857e17
-# To convert number density to vmr
-pres = datafile.pressure.where((datafile.latitude > -5) & (datafile.latitude < 5))
-temp = datafile.temperature.where((datafile.latitude > -5) & (datafile.latitude < 5))
-nox = (nox * temp * 1.3806503e-19 / pres) * 1e9  # ppbv
-
-nox = nox.resample('MS', dim='time', how='mean')
+# load NOx data
+nox = open_data.load_osiris_nox_monthly(start_date='20050101', end_date='20141231', min_lat=-5, max_lat=5)
 monthlymeans = nox.groupby('time.month').mean('time')
 anomalies = nox.groupby('time.month') - monthlymeans
 

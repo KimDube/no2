@@ -31,7 +31,7 @@ if __name__ == "__main__":
     anomalies_hno3 = anomalies_hno3.sel(nLevels=10)  # 10 hPa
 
     # Load NOx
-    dnox, pres_nox = open_data.load_osiris_nox_monthly(start_date='20050101', end_date='20141231',
+    nox, pres_nox = open_data.load_osiris_nox_monthly(start_date='20050101', end_date='20141231',
                                                       min_lat=-10, max_lat=10, pressure=1)
 
     # get values at 10 hPa

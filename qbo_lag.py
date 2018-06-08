@@ -16,7 +16,6 @@ file1 = pd.read_csv(location)
 file1 = np.array(file1)  # rows are heights and columns are month/year [height, time]
 
 time = pd.date_range('2002-01-01', freq='M', periods=12 * 14)
-# make into an xarray cause i like a challenge?
 winds = xr.DataArray(file1, coords=[heights, time], dims=['heights', 'time'])
 w1 = winds.sel(time=slice('2005-01-01', '2007-08-01'))  # nov 2005
 w2 = winds.sel(time=slice('2007-01-01', '2009-08-01'))  # nov 2007

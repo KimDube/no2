@@ -16,15 +16,15 @@ longs = np.arange(-180, 190, 10)
 
 map = np.zeros((len(lats), len(longs)))
 
-for i in range(len(lats)):
-    for j in range(len(longs)):
-        mmm = dataf.ozone_concentration.where((dataf.latitude > i) & (dataf.latitude < i+10) &
-                                (dataf.longitude > j) & (dataf.longitude < j+10))
+for i in range(len(lats)-1):
+    for j in range(len(longs)-1):
+        mmm = dataf.ozone_concentration.where((dataf.latitude > lats[i]) & (dataf.latitude < lats[i+1]) &
+                                (dataf.longitude > longs[j]) & (dataf.longitude < longs[j+1]))
         map[i, j] = np.nanmean(mmm)
 
 sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
 fig, ax = plt.subplots(figsize=(12, 6))
-im = plt.contourf(longs, lats, map, np.arange(1.2e12, 1.5e12, 1e10))
+im = plt.contourf(longs, lats, map, np.arange(1.2e12, 2.5e12, 1e10))
 cb = plt.colorbar(im, fraction=0.05, pad=0.02)
 cb.set_label("Ozone Number Density")
 plt.xlabel("Longitude")

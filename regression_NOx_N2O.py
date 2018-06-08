@@ -9,7 +9,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 
 if __name__ == "__main__":
-    # Load daily NOx
+    # Load monthly NOx
     nox, pres_nox = open_data.load_osiris_nox_monthly(start_date='20050101', end_date='20141231',
                                                       min_lat=-10, max_lat=10, pressure=1)
 

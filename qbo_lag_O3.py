@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import xarray as xr
 import pandas as pd
-from NO2 import open_data
+import open_data
 
 
 # load wind data

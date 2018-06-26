@@ -7,7 +7,7 @@ import seaborn as sns
 import xarray as xr
 from scipy.stats.stats import pearsonr
 import numpy as np
-from NO2 import helper_functions, open_data
+import helper_functions, open_data
 
 
 if __name__ == "__main__":

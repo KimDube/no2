@@ -56,9 +56,70 @@ def load_sage_ii_no2(start_date='1984-10-24', end_date='2005-8-31', min_lat=-10,
         return sunrise, sunset
 
 
+def sage_ii_no2_combine_sunrise_sunset(sunrise_anom, sunset_anom, min_alt, max_alt):
+    """
+    Combine sage ii sunrise and sunset anomalies.
+    :param sunrise_anom: sunrise anomalies to use. xarray with [time, altitude].
+    :param sunset_anom: sunset anomalies to use. xarray with [time, altitude].
+    :param min_alt: minimum altitude to include.
+    :param max_alt: maximum altitude to include.
+    :return: Combined sunrise and sunset monthly mean anomalies in lat range for each alt in alt range.
+    """
+    combined = np.zeros((len(sunset_anom.time), len(sunset_anom.altitude)))
+    for alt_ind in range(int((max_alt - min_alt) * 2)):
+        c = np.array([sunrise_anom.NO2[:, alt_ind].values, sunset_anom.NO2[:, alt_ind].values])
+        combined[:, alt_ind] = np.nanmean(c, axis=0)
+    return combined
+
+
 # # # # # #
 # OSIRIS  #
 # # # # # #
+
+def load_osiris_no2_monthly(start_date='20020101', end_date='20161232', min_lat=-10, max_lat=10, no2_type='measured'):
+    """
+    :param start_date: string 'yyyy-m-d'
+    :param end_date: string 'yyyy-m-d'
+    :param min_lat: minimum latitude to include in means. Default is -10.
+    :param max_lat: maximum latitude to include in means. Default is 10.
+    :param no2_type: type of data to use. 630 am, derived daily mean, measured, or return all of these.
+    :return: xarray of monthly mean OSIRIS NO2 in latitude band corresponding to type.
+    """
+
+    assert(no2_type == '630') or (no2_type == 'dailymean') or (no2_type == 'measured') or (no2_type == 'all3'), \
+        "no2_type must be one of [630, dailymean, measured, all3]"
+
+    datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
+    datafile = datafile.swap_dims({'profile_id': 'time'}, inplace=True)
+    datafile = datafile.sel(time=slice(start_date, end_date))
+
+    if no2_type == 'measured':
+        no2_osiris = datafile.NO2_concentration.where((datafile.latitude > min_lat)
+                                                      & (datafile.latitude < max_lat))
+        no2_osiris = no2_osiris.resample(time='MS').mean('time', skipna=True)
+        return no2_osiris
+    elif no2_type == 'dailymean':
+        no2_osiris = datafile.derived_daily_mean_NO2_concentration.where((datafile.latitude > min_lat)
+                                                                         & (datafile.latitude < max_lat))
+        no2_osiris = no2_osiris.resample(time='MS').mean('time', skipna=True)
+        return no2_osiris
+    elif no2_type == '630':
+        no2_osiris = datafile.derived_0630_NO2_concentration.where((datafile.latitude > min_lat)
+                                                                   & (datafile.latitude < max_lat))
+        no2_osiris = no2_osiris.resample(time='MS').mean('time', skipna=True)
+        return no2_osiris
+    elif no2_type == 'all3':
+        no2_osiris_m = datafile.NO2_concentration.where((datafile.latitude > min_lat)
+                                                        & (datafile.latitude < max_lat))
+        no2_osiris_m = no2_osiris_m.resample(time='MS').mean('time', skipna=True)
+        no2_osiris_dm = datafile.derived_daily_mean_NO2_concentration.where((datafile.latitude > min_lat)
+                                                                            & (datafile.latitude < max_lat))
+        no2_osiris_dm = no2_osiris_dm.resample(time='MS').mean('time', skipna=True)
+        no2_osiris_630 = datafile.derived_0630_NO2_concentration.where((datafile.latitude > min_lat)
+                                                                       & (datafile.latitude < max_lat))
+        no2_osiris_630 = no2_osiris_630.resample(time='MS').mean('time', skipna=True)
+        return no2_osiris_m, no2_osiris_dm, no2_osiris_630
+
 
 def load_osiris_nox_monthly(start_date='20050101', end_date='20141231', min_lat=-10, max_lat=10, pressure=0):
     """

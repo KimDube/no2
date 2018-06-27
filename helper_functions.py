@@ -7,6 +7,18 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 
 
+def relative_anomaly(monthly_dataset):
+    """
+    Calculate relative anomaly.
+    :param monthly_dataset: a dataset with monthly spacing in time
+    :return: relative anomaly from monthly mean for each value in dataset
+    """
+    monthlymeans = monthly_dataset.groupby('time.month').mean('time')
+    monthly_anom = monthly_dataset.groupby('time.month') - monthlymeans
+    monthly_anom = monthly_anom.groupby('time.month') / monthlymeans
+    return monthly_anom
+
+
 def interpolate_to_mls_pressure(osiris_pressure, osiris_vmr):
     """
     Interpolate OSIRIS data from altitude to MLS pressure levels 5 to 15.

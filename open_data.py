@@ -1,8 +1,59 @@
 """
-Open data
+Open data from SAGE II, OSIRIS, MLS
 """
 
 import xarray as xr
+import pandas as pd
+import numpy as np
+from pysagereader.sage_ii_reader import SAGEIILoaderV700
+
+
+# # # # # #
+# SAGE II #
+# # # # # #
+
+def load_sage_ii_no2(start_date='1984-10-24', end_date='2005-8-31', min_lat=-10, max_lat=10, sun='set'):
+    """
+    :param start_date: string 'yyyy-m-d' in range 1984-10-24 to 2005-8-31.
+    :param end_date: string 'yyyy-m-d' in range 1984-10-24 to 2005-8-31.
+    :param min_lat: minimum latitude to include in means. Default is -10.
+    :param max_lat: maximum latitude to include in means. Default is 10.
+    :param sun: NO2 values to return: string, one of [rise, set, both]
+    :return: xarray of monthly mean SAGE II NO2 in time and latitude range with bad NO2 values removed. Measurements
+    from either sunrise, sunset, or return both.
+    """
+    assert (sun == 'rise') or (sun == 'set') or (sun == 'both'), "sun must be one of [rise, set, both]"
+
+    sage = SAGEIILoaderV700()
+    sage.data_folder = '/home/kimberlee/ValhallaData/SAGE/Sage2_v7.00/'
+    data = sage.load_data(start_date, end_date, min_lat, max_lat)
+    # convert dates
+    dates = pd.to_datetime(data['mjd'], unit='d', origin=pd.Timestamp('1858-11-17'))
+    # get rid of bad data
+    data['NO2'][data['NO2'] == data['FillVal']] = np.nan
+    data['NO2'][data['NO2_Err'] > 10000] = np.nan  # uncertainty greater than 100%
+    # get no2 altitudes
+    no2_alts = data['Alt_Grid'][(data['Alt_Grid'] >= data['Range_NO2'][0]) & (data['Alt_Grid'] <= data['Range_NO2'][1])]
+
+    if sun == 'set':
+        data['NO2'][data['Type_Tan'] == 0] = np.nan  # remove sunrise events
+        sunset = xr.Dataset({'NO2': (['time', 'altitude'], data['NO2'])}, coords={'altitude': no2_alts, 'time': dates})
+        sunset = sunset.resample(time='MS').mean('time', skipna=True)
+        return sunset
+    elif sun == 'rise':
+        data['NO2'][data['Type_Tan'] == 1] = np.nan  # remove sunset events
+        sunrise = xr.Dataset({'NO2': (['time', 'altitude'], data['NO2'])}, coords={'altitude': no2_alts, 'time': dates})
+        sunrise = sunrise.resample(time='MS').mean('time', skipna=True)
+        return sunrise
+    elif sun == 'both':
+        no2 = np.copy(data['NO2'])
+        no2[data['Type_Tan'] == 0] = np.nan  # remove sunrise events
+        sunset = xr.Dataset({'NO2': (['time', 'altitude'], no2)}, coords={'altitude': no2_alts, 'time': dates})
+        sunset = sunset.resample(time='MS').mean('time', skipna=True)
+        data['NO2'][data['Type_Tan'] == 1] = np.nan  # remove sunset events
+        sunrise = xr.Dataset({'NO2': (['time', 'altitude'], data['NO2'])}, coords={'altitude': no2_alts, 'time': dates})
+        sunrise = sunrise.resample(time='MS').mean('time', skipna=True)
+        return sunrise, sunset
 
 
 # # # # # #

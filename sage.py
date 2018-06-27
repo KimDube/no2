@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from pysagereader.sage_ii_reader import SAGEIILoaderV700
 import xarray as xr
+import open_data
 
 
 def sage_ii_ozone(data_folder):
@@ -55,136 +56,109 @@ def sage_ii_ozone(data_folder):
     #plt.show()
 
 
-def sage_ii_no2_sunrise_sunset(data_folder):
-    # load the data
-    sage = SAGEIILoaderV700()
-    sage.data_folder = data_folder
-    data = sage.load_data('1999-1-1', '2005-8-31', -10, 10)
+def sage_ii_no2_sunrise_sunset(min_lat, max_lat, min_alt, max_alt):
+    """
+    
+    :param min_lat:
+    :param max_lat:
+    :param min_alt:
+    :param max_alt:
+    :return:
+    """
 
-    # convert dates
-    dates = pd.to_datetime(data['mjd'], unit='d', origin=pd.Timestamp('1858-11-17'))
+    sunrise, sunset = open_data.load_sage_ii_no2(start_date='1996-1-1', end_date='2005-8-31',
+                                                 min_lat=min_lat, max_lat=max_lat, sun='both')
+    # Find sunrise and sunset anomalies separately
+    sunset = sunset.sel(altitude=slice(min_alt, max_alt))
+    monthlymeans = sunset.groupby('time.month').mean('time')
+    anomalies_sunset = sunset.groupby('time.month') - monthlymeans
+    anomalies_sunset = anomalies_sunset.groupby('time.month') / monthlymeans
 
-    # get rid of bad data
-    data['NO2'][data['NO2'] == data['FillVal']] = np.nan
-    data['NO2'][data['NO2_Err'] > 10000] = np.nan  # uncertainty greater than 100%
+    sunrise = sunrise.sel(altitude=slice(min_alt, max_alt))
+    monthlymeans = sunrise.groupby('time.month').mean('time')
+    anomalies_sunrise = sunrise.groupby('time.month') - monthlymeans
+    anomalies_sunrise = anomalies_sunrise.groupby('time.month') / monthlymeans
 
-    # get no2 altitudes
-    no2_alts = data['Alt_Grid'][(data['Alt_Grid'] >= data['Range_NO2'][0]) & (data['Alt_Grid'] <= data['Range_NO2'][1])]
+    for alt_ind in range((max_alt - min_alt) * 2):
+        combined = np.array([anomalies_sunrise.NO2[:, alt_ind].values, anomalies_sunset.NO2[:, alt_ind].values])
+        combined = np.nanmean(combined, axis=0)
 
-    # Create dataset
-    ds = xr.Dataset({'NO2': (['time', 'altitude'], data['NO2'])},
-                    coords={'altitude': no2_alts,
-                            'time': dates})
-    ds = ds.sel(altitude=slice(24.5, 40.5))  # data above and below these altitudes is noisy
-    ds /= 1e9
-
-    no2 = np.copy(data['NO2'])
-    no2[data['Type_Tan'] == 0] = np.nan  # remove sunrise events
-    sunset = xr.Dataset({'NO2': (['time', 'altitude'], no2)},
-                        coords={'altitude': no2_alts,
-                                'time': dates})
-    sunset = sunset.sel(altitude=slice(24.5, 40.5))
-    sunset /= 1e9
-
-    no2_2 = data['NO2']
-    no2_2[data['Type_Tan'] == 1] = np.nan  # remove sunset events
-    sunrise = xr.Dataset({'NO2': (['time', 'altitude'], no2_2)},
-                         coords={'altitude': no2_alts,
-                                 'time': dates})
-    sunrise = sunrise.sel(altitude=slice(24.5, 40.5))
-    sunrise /= 1e9
-
-    monthly_set = sunset.resample(time='MS').mean('time', skipna=True)
-    monthly_rise = sunrise.resample(time='MS').mean('time', skipna=True)
-
-    for alt_ind in range(32):
         plt.ioff()
         sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
-        sns.set_palette('Set2', 4)
+        sns.set_palette('Set2', 3)
         fig, ax = plt.subplots(figsize=(15, 7))
-        plt.plot(sunrise['time'], sunrise.NO2[:, alt_ind], 'o', markersize=5, label="Sunrise")
+        plt.plot(anomalies_sunrise['time'], anomalies_sunrise.NO2[:, alt_ind], 'o', markersize=5, label="Sunrise")
 
-        plt.plot(sunset['time'], sunset.NO2[:, alt_ind], 'o', markersize=5, label="Sunset")
+        plt.plot(anomalies_sunset['time'], anomalies_sunset.NO2[:, alt_ind], 'o', markersize=5, label="Sunset")
 
-        plt.plot(monthly_set['time'], monthly_set.NO2[:, alt_ind], '*', label="Monthly Mean Sunset")
-        plt.plot(monthly_rise['time'], monthly_rise.NO2[:, alt_ind], '*', label="Monthly Mean Sunrise")
+        plt.plot(anomalies_sunset['time'], combined, 'o-', markersize=5, label="Combined")
 
-        plt.ylabel("NO$\mathregular{_2}$ [10$\mathregular{^{9}}$ molecules/cm$\mathregular{^{3}}$]")
-        plt.title("%.1f km, lat=(-10, 10)" % sunset.altitude.values[alt_ind])
+        plt.ylabel("NO$\mathregular{_2}$ Anomaly")
+        plt.title("%.1f km, lat=(-5, 5)" % sunset.altitude.values[alt_ind])
         plt.legend(loc=1, frameon=True)
-        plt.savefig("/home/kimberlee/Masters/NO2/Figures/SAGE_10S10N/sage_no2_10S10N_%.1f.png" % sunset.altitude.values[alt_ind], format='png', dpi=150)
+        plt.savefig("/home/kimberlee/Masters/NO2/Figures/SAGE_10S10N/sage_no2_%.1f.png" % sunset.altitude.values[alt_ind], format='png', dpi=150)
 
 
-def sage_ii_no2_time_series(data_folder):
+def sage_ii_no2_time_series(min_lat, max_lat):
     """
-    plot the monthly averaged no2 in the tropics
+    :param min_lat: lower latitude limit
+    :param max_lat: upper latitude limit
+    :return plot monthly mean NO2 in latitude band
     """
     # load the data
     sage = SAGEIILoaderV700()
-    sage.data_folder = data_folder
-    data = sage.load_data('1984-10-24', '2005-8-31', -10, 10)
-
+    sage.data_folder = '/home/kimberlee/ValhallaData/SAGE/Sage2_v7.00/'
+    data = sage.load_data('1996-1-1', '2005-8-31', min_lat, max_lat)
     # convert dates
     dates = pd.to_datetime(data['mjd'], unit='d', origin=pd.Timestamp('1858-11-17'))
-
     # get rid of bad data
     data['NO2'][data['NO2'] == data['FillVal']] = np.nan
     data['NO2'][data['NO2_Err'] > 10000] = np.nan  # uncertainty greater than 100%
-
     # get no2 altitudes
     no2_alts = data['Alt_Grid'][(data['Alt_Grid'] >= data['Range_NO2'][0]) & (data['Alt_Grid'] <= data['Range_NO2'][1])]
 
-    # Create dataset
-    ds = xr.Dataset({'NO2': (['time', 'altitude'], data['NO2'])},
-                    coords={'altitude': no2_alts,
-                            'time': dates})
-    ds = ds.sel(altitude=slice(24.5, 40.5))  # data above and below these altitudes is noisy
-    ds /= 1e9
-    monthly_no2 = ds.resample(time='MS').mean('time', skipna=True)
-    monthly_no2 = monthly_no2.where(monthly_no2.NO2 > 0.1)  # remove lowest densities (pinatubo)
-
+    # Create datasets of monthly mean anomalies
     no2 = np.copy(data['NO2'])
     no2[data['Type_Tan'] == 0] = np.nan  # remove sunrise events
-    sunset = xr.Dataset({'NO2': (['time', 'altitude'], no2)},
-                        coords={'altitude': no2_alts,
-                                'time': dates})
+    sunset = xr.Dataset({'NO2': (['time', 'altitude'], no2)}, coords={'altitude': no2_alts, 'time': dates})
     sunset = sunset.sel(altitude=slice(24.5, 40.5))
     sunset /= 1e9
     sunset = sunset.resample(time='MS').mean('time', skipna=True)
-    sunset = sunset.where(sunset.NO2 > 0.1)  # remove lowest densities (pinatubo)
+    monthlymeans = sunset.groupby('time.month').mean('time')
+    anomalies_sunset = sunset.groupby('time.month') - monthlymeans
+    anomalies_sunset = anomalies_sunset.groupby('time.month') / monthlymeans
 
     no2_2 = data['NO2']
     no2_2[data['Type_Tan'] == 1] = np.nan  # remove sunset events
-    sunrise = xr.Dataset({'NO2': (['time', 'altitude'], no2_2)},
-                        coords={'altitude': no2_alts,
-                                'time': dates})
+    sunrise = xr.Dataset({'NO2': (['time', 'altitude'], no2_2)}, coords={'altitude': no2_alts, 'time': dates})
     sunrise = sunrise.sel(altitude=slice(24.5, 40.5))
     sunrise /= 1e9
     sunrise = sunrise.resample(time='MS').mean('time', skipna=True)
+    monthlymeans = sunrise.groupby('time.month').mean('time')
+    anomalies_sunrise = sunrise.groupby('time.month') - monthlymeans
+    anomalies_sunrise = anomalies_sunrise.groupby('time.month') / monthlymeans
 
-    # anomaly
-    monthlymeans = sunset.groupby('time.month').mean('time')
-    anomalies = sunset.groupby('time.month') - monthlymeans
-    anomalies = anomalies.groupby('time.month') / monthlymeans
+    combined = np.zeros((len(anomalies_sunset.time), len(anomalies_sunset.altitude)))
+
+    for alt_ind in range(32):
+        c = np.array([anomalies_sunrise.NO2[:, alt_ind].values, anomalies_sunset.NO2[:, alt_ind].values])
+        combined[:, alt_ind] = np.nanmean(c, axis=0)
 
     sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
     fig, ax = plt.subplots(figsize=(10, 5))
-    plt.ioff()
-
-    # fax = plt.pcolormesh(monthly_no2.time, monthly_no2.altitude, monthly_no2.NO2.T, vmin=0.1, vmax=3.0, cmap='hot')
-    fax = plt.pcolormesh(anomalies.time, anomalies.altitude, anomalies.NO2.T, vmin=-0.3, vmax=0.3, cmap='RdBu_r')
-
+    fax = plt.pcolormesh(anomalies_sunset.time, anomalies_sunset.altitude, combined.T,
+                         vmin=-0.3, vmax=0.3, cmap='RdBu_r')
     plt.ylabel('Altitude [km]')
     plt.ylim(25, 40)
     plt.xlabel('')
     locs, labels = plt.xticks()
     plt.setp(labels, rotation=0)
-    plt.title('Monthly Mean SAGE II NO$\mathregular{_2}$ - Sunset (-10 to 10 deg. lat.)')
+    plt.title('Monthly Mean SAGE II NO$\mathregular{_2}$ Combined (%i to %i deg. lat.)' % (min_lat, max_lat))
     cb = fig.colorbar(fax, orientation='horizontal', fraction=0.2, aspect=50)
     # cb.set_label("NO$\mathregular{_2}$ [10$\mathregular{^{9}}$ molecules/cm$\mathregular{^{3}}$]")
     cb.set_label("NO$\mathregular{_2}$ Anomaly")
     plt.tight_layout()
-    plt.savefig("/home/kimberlee/Masters/NO2/Figures/sage_no2_anomaly_sunset_without_pinatubo.png", format='png', dpi=150)
+    plt.savefig("/home/kimberlee/Masters/NO2/Figures/sage_no2_anomaly_combined_overlap.png", format='png', dpi=150)
     plt.show()
 
 
@@ -469,8 +443,8 @@ def sage_osiris_no2_im(min_lat, max_lat):
 
 
 if __name__ == "__main__":
-    # sage_ii_no2_sunrise_sunset('/home/kimberlee/ValhallaData/SAGE/Sage2_v7.00/')
-    # sage_ii_no2_time_series('/home/kimberlee/ValhallaData/SAGE/Sage2_v7.00/')
-    sage_osiris_no2_time_series(-25, 15)
+    sage_ii_no2_sunrise_sunset(-5, 5, 24.5, 40.5)
+    # sage_ii_no2_time_series(-5, 5)
+    # sage_osiris_no2_time_series(-25, 15)
     # sage_osiris_no2_profile(-5, 5)
     # sage_osiris_no2_im(-5, 5)

@@ -1,10 +1,7 @@
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 import pandas as pd
-from pysagereader.sage_ii_reader import SAGEIILoaderV700
-import xarray as xr
 import open_data
 import helper_functions
 
@@ -106,84 +103,53 @@ def sage_osiris_no2_time_series(start_date_sage, end_date_sage, start_date_osiri
                     (min_lat, max_lat, sunset.altitude.values[alt_ind]), format='png', dpi=150)
 
 
-def sage_osiris_no2_profile(min_lat, max_lat):
-    # load sage II
-    sage = SAGEIILoaderV700()
-    sage.data_folder = '/home/kimberlee/ValhallaData/SAGE/Sage2_v7.00/'
-    data = sage.load_data('2002-1-1', '2005-8-31', min_lat, max_lat)
-    # convert dates
-    dates = pd.to_datetime(data['mjd'], unit='d', origin=pd.Timestamp('1858-11-17'))
-    # get rid of bad data
-    data['NO2'][data['NO2'] == data['FillVal']] = np.nan
-    data['NO2'][data['NO2_Err'] > 10000] = np.nan  # uncertainty greater than 100%
-    # get no2 altitudes
-    no2_alts = data['Alt_Grid'][(data['Alt_Grid'] >= data['Range_NO2'][0]) & (data['Alt_Grid'] <= data['Range_NO2'][1])]
+def sage_osiris_no2_profile(start_date_sage, end_date_sage,
+                            start_date_osiris, end_date_osiris, min_lat, max_lat, min_alt, max_alt):
+    """
+   :param start_date_sage: use sage data starting at this day. yyyy-m-d
+   :param end_date_sage:  use sage data ending at this day. yyyy-m-d
+   :param start_date_osiris: use osiris data starting at this day. yyyymmdd
+   :param end_date_osiris: use osiris data ending at this day. yyyymmdd
+   :param min_lat: lower latitude limit
+   :param max_lat: upper latitude limit
+   :param min_alt: lower altitude limit
+   :param max_alt: upper altitude limit
+   :return: save plots of osiris and sage zonal mean profiles for each month in time ranges
+   """
+    sunrise, sunset = open_data.load_sage_ii_no2(start_date=start_date_sage, end_date=end_date_sage,
+                                                 min_lat=min_lat, max_lat=max_lat, sun='both')
 
-    no2 = np.copy(data['NO2'])
-    no2[data['Type_Tan'] == 0] = np.nan  # remove sunrise events
-    sunset = xr.Dataset({'NO2': (['time', 'altitude'], no2)},
-                        coords={'altitude': no2_alts,
-                                'time': dates})
-    sunset = sunset.sel(altitude=slice(24.5, 39.5))
-    sunset /= 1e9
-    sunset = sunset.resample(time='MS').mean('time', skipna=True)
+    sunset = sunset.sel(altitude=slice(min_alt, max_alt - 1))
     sunset = sunset.where((sunset.altitude % 1) == 0.5, drop=True)  # every second altitude to match OSIRIS
+    sunset /= 1e9
 
-    no2_2 = np.copy(data['NO2'])
-    no2_2[data['Type_Tan'] == 1] = np.nan  # remove sunset events
-    sunrise = xr.Dataset({'NO2': (['time', 'altitude'], no2_2)},
-                         coords={'altitude': no2_alts,
-                                 'time': dates})
-    sunrise = sunrise.sel(altitude=slice(24.5, 39.5))
-    sunrise /= 1e9
-    sunrise = sunrise.resample(time='MS').mean('time', skipna=True)
+    sunrise = sunrise.sel(altitude=slice(min_alt, max_alt - 1))
     sunrise = sunrise.where((sunrise.altitude % 1) == 0.5, drop=True)  # every second altitude to match OSIRIS
-
-    # all SAGE
-    sage_all = xr.Dataset({'NO2': (['time', 'altitude'], data['NO2'])},
-                          coords={'altitude': no2_alts,
-                                  'time': dates})
-    sage_all = sage_all.sel(altitude=slice(24.5, 39.5))
-    sage_all /= 1e9
-    sage_all = sage_all.resample(time='MS').mean('time', skipna=True)
-    sage_all = sage_all.where((sage_all.altitude % 1) == 0.5, drop=True)  # every second altitude to match OSIRIS
+    sunrise /= 1e9
 
     # load OSIRIS
-    datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
-    datafile = datafile.swap_dims({'profile_id': 'time'}, inplace=True)
-    datafile = datafile.sel(time=slice('20020101', '20050831'))
+    no2_osiris, no2_osiris_daily, no2_osiris_630 = open_data.load_osiris_no2_monthly(
+        start_date=start_date_osiris, end_date=end_date_osiris, min_lat=min_lat, max_lat=max_lat, no2_type='all3')
 
-    no2_osiris = datafile.NO2_concentration.where((datafile.latitude > min_lat) & (datafile.latitude < max_lat))
-    no2_osiris = no2_osiris.sel(altitude=slice(24.5, 40.5))
-    no2_osiris = no2_osiris.resample(time='MS').mean('time', skipna=True)
-    # to convert concentration to number density [mol/m^3 to molecule/cm^3]
-    no2_osiris *= 6.022140857e17
+    no2_osiris = no2_osiris.sel(altitude=slice(min_alt, max_alt))
+    no2_osiris *= 6.022140857e17  # to convert concentration to number density [mol/m^3 to molecule/cm^3]
     no2_osiris /= 1e9
 
-    no2_osiris_daily = datafile.derived_daily_mean_NO2_concentration.where((datafile.latitude > min_lat)
-                                                                           & (datafile.latitude < max_lat))
-    no2_osiris_daily = no2_osiris_daily.sel(altitude=slice(24.5, 40.5))
-    no2_osiris_daily = no2_osiris_daily.resample(time='MS').mean('time', skipna=True)
-    # to convert concentration to number density [mol/m^3 to molecule/cm^3]
-    no2_osiris_daily *= 6.022140857e17
+    no2_osiris_daily = no2_osiris_daily.sel(altitude=slice(min_alt, max_alt))
+    no2_osiris_daily *= 6.022140857e17  # to convert concentration to number density [mol/m^3 to molecule/cm^3]
     no2_osiris_daily /= 1e9
 
-    no2_osiris_630 = datafile.derived_0630_NO2_concentration.where(
-        (datafile.latitude > -10) & (datafile.latitude < 10))
-    no2_osiris_630 = no2_osiris_630.sel(altitude=slice(24.5, 40.5))
-    no2_osiris_630 = no2_osiris_630.resample(time='MS').mean('time', skipna=True)
-    # to convert concentration to number density [mol/m^3 to molecule/cm^3]
-    no2_osiris_630 *= 6.022140857e17
+    no2_osiris_630 = no2_osiris_630.sel(altitude=slice(min_alt, max_alt))
+    no2_osiris_630 *= 6.022140857e17  # to convert concentration to number density [mol/m^3 to molecule/cm^3]
     no2_osiris_630 /= 1e9
 
     for month in range(len(sunset.time.values)):
         plt.ioff()
         sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
         sns.set_palette('hls', 5)
-        fig, ax = plt.subplots(figsize=(8, 8))
+        plt.subplots(figsize=(8, 8))
         plt.plot(sunrise.NO2[month, :], sunrise.altitude, '-o', label="SAGE Sunrise")
         plt.plot(sunset.NO2[month, :], sunset.altitude, '-o', label="SAGE Sunset")
-        # plt.plot(sage_all['time'], sage_all.NO2[:, alt_ind], 'o', label="SAGE Both")
 
         plt.plot(no2_osiris_daily[month, :], no2_osiris_daily.altitude, '-*', label="OSIRIS Daily Mean")
         plt.plot(no2_osiris_630[month, :], no2_osiris_630.altitude, '-*', label="OSIRIS 6:30")
@@ -201,63 +167,39 @@ def sage_osiris_no2_profile(min_lat, max_lat):
                     (month, timestring), format='png', dpi=150)
 
 
-def sage_osiris_no2_im(min_lat, max_lat):
-    # load sage II
-    sage = SAGEIILoaderV700()
-    sage.data_folder = '/home/kimberlee/ValhallaData/SAGE/Sage2_v7.00/'
-    data = sage.load_data('1996-1-1', '2005-8-31', min_lat, max_lat)
-    # convert dates
-    dates = pd.to_datetime(data['mjd'], unit='d', origin=pd.Timestamp('1858-11-17'))
-    # get rid of bad data
-    data['NO2'][data['NO2'] == data['FillVal']] = np.nan
-    data['NO2'][data['NO2_Err'] > 10000] = np.nan  # uncertainty greater than 100%
-    # get no2 altitudes
-    no2_alts = data['Alt_Grid'][(data['Alt_Grid'] >= data['Range_NO2'][0]) & (data['Alt_Grid'] <= data['Range_NO2'][1])]
+def sage_osiris_no2_im(start_date_sage, end_date_sage, start_date_osiris, end_date_osiris,
+                       min_lat, max_lat, min_alt, max_alt):
+    """
+    :param start_date_sage: use sage data starting at this day. yyyy-m-d
+    :param end_date_sage:  use sage data ending at this day. yyyy-m-d
+    :param start_date_osiris: use osiris data starting at this day. yyyymmdd
+    :param end_date_osiris: use osiris data ending at this day. yyyymmdd
+    :param min_lat: lower latitude limit
+    :param max_lat: upper latitude limit
+    :param min_alt: lower altitude limit
+    :param max_alt: upper altitude limit
+    :return: save plots of osiris and sage monthly mean in latitude range as a function of altitude and time
+    """
+    # load SAGE
+    sunrise, sunset = open_data.load_sage_ii_no2(start_date=start_date_sage, end_date=end_date_sage,
+                                                 min_lat=min_lat, max_lat=max_lat, sun='both')
 
-    no2 = np.copy(data['NO2'])
-    no2[data['Type_Tan'] == 0] = np.nan  # remove sunrise events
-    sunset = xr.Dataset({'NO2': (['time', 'altitude'], no2)},
-                        coords={'altitude': no2_alts,
-                                'time': dates})
-    sunset = sunset.sel(altitude=slice(24.5, 39.5))
-    sunset /= 1e9
-    sunset = sunset.resample(time='MS').mean('time', skipna=True)
+    sunset = sunset.sel(altitude=slice(min_alt, max_alt - 1))
     sunset = sunset.where((sunset.altitude % 1) == 0.5, drop=True)  # every second altitude to match OSIRIS
-    monthlymeans = sunset.groupby('time.month').mean('time')
-    sunset_anom = sunset.groupby('time.month') - monthlymeans
-    sunset_anom = sunset_anom.groupby('time.month') / monthlymeans
+    sunset_anom = helper_functions.relative_anomaly(sunset)
 
-    no2_2 = np.copy(data['NO2'])
-    no2_2[data['Type_Tan'] == 1] = np.nan  # remove sunset events
-    sunrise = xr.Dataset({'NO2': (['time', 'altitude'], no2_2)},
-                         coords={'altitude': no2_alts,
-                                 'time': dates})
-    sunrise = sunrise.sel(altitude=slice(24.5, 39.5))
-    sunrise /= 1e9
-    sunrise = sunrise.resample(time='MS').mean('time', skipna=True)
+    sunrise = sunrise.sel(altitude=slice(min_alt, max_alt - 1))
     sunrise = sunrise.where((sunrise.altitude % 1) == 0.5, drop=True)  # every second altitude to match OSIRIS
-    monthlymeans = sunrise.groupby('time.month').mean('time')
-    sunrise_anom = sunrise.groupby('time.month') - monthlymeans
-    sunrise_anom = sunrise_anom.groupby('time.month') / monthlymeans
+    sunrise_anom = helper_functions.relative_anomaly(sunrise)
 
     # load OSIRIS
-    datafile = xr.open_mfdataset('/home/kimberlee/OsirisData/Level2/no2_v6.0.2/*.nc')
-    datafile = datafile.swap_dims({'profile_id': 'time'}, inplace=True)
-    datafile = datafile.sel(time=slice('20020101', '20161231'))
-    no2_osiris = datafile.NO2_concentration.where((datafile.latitude > -10) & (datafile.latitude < 10))
-    no2_osiris = no2_osiris.sel(altitude=slice(24.5, 40.5))
-    no2_osiris = no2_osiris.resample(time='MS').mean('time', skipna=True)
-    # to convert concentration to number density [mol/m^3 to molecule/cm^3]
-    no2_osiris *= 6.022140857e17
-    no2_osiris /= 1e9
-    monthlymeans = no2_osiris.groupby('time.month').mean('time')
-    osiris_anom = no2_osiris.groupby('time.month') - monthlymeans
-    osiris_anom = osiris_anom.groupby('time.month') / monthlymeans
+    no2_osiris = open_data.load_osiris_no2_monthly(start_date=start_date_osiris, end_date=end_date_osiris,
+                                                   min_lat=min_lat, max_lat=max_lat, no2_type='measured')
+    no2_osiris = no2_osiris.sel(altitude=slice(min_alt, max_alt))
+    osiris_anom = helper_functions.relative_anomaly(no2_osiris)
 
     sns.set(context="talk", style="white", rc={'font.family': [u'serif']})
     f, (ax1, ax2, ax3) = plt.subplots(3, sharex=True, sharey=True, figsize=(12, 10))
-
-    plt.ioff()
 
     ax1.pcolormesh(sunrise_anom.time, sunrise_anom.altitude, sunrise_anom.NO2.T, vmin=-0.3, vmax=0.3, cmap='RdBu_r')
     f2 = ax2.pcolormesh(sunset_anom.time, sunset_anom.altitude, sunset_anom.NO2.T, vmin=-0.3, vmax=0.3, cmap='RdBu_r')
@@ -284,12 +226,11 @@ def sage_osiris_no2_im(min_lat, max_lat):
     cb.set_label("NO$\mathregular{_2}$ Anomaly")
     plt.savefig("/home/kimberlee/Masters/NO2/Figures/sage_osiris_no2_anomaly.png", format='png',
                 dpi=150)
-
     plt.show()
 
 
 if __name__ == "__main__":
     # sage_ii_no2_time_series('1996-10-24', '2005-8-31', -5, 5, 24.5, 40.5)
-    sage_osiris_no2_time_series('1997-1-1', '2005-8-31', '20020101', '20091231', -5, 5, 24.5, 40.5)
-    # sage_osiris_no2_profile(-5, 5)
-    # sage_osiris_no2_im(-5, 5)
+    # sage_osiris_no2_time_series('1997-1-1', '2005-8-31', '20020101', '20091231', -65, -55, 24.5, 40.5)
+    # sage_osiris_no2_profile('2002-1-1', '2005-8-31', '20020101', '20050831', -5, 5, 24.5, 40.5)
+    sage_osiris_no2_im('1996-1-1', '2005-8-31', '20020101', '20171231', -5, 5, 24.5, 40.5)

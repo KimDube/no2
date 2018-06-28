@@ -50,8 +50,8 @@ if __name__ == "__main__":
     anomalies_n2o = anomalies_n2o.values
 
     # Interpolate missing values, otherwise correlation won't work
-    anomalies_noy = helper_functions.linearinterp(anomalies_noy, mls_levels)
-    anomalies_n2o = helper_functions.linearinterp(anomalies_n2o, mls_levels)
+    anomalies_noy = helper_functions.linearinterp2d(anomalies_noy, mls_levels)
+    anomalies_n2o = helper_functions.linearinterp2d(anomalies_n2o, mls_levels)
 
     # Calculate corr coeff for each pressure level
     cc = np.zeros(len(mls_levels))

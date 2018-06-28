@@ -42,7 +42,7 @@ def interpolate_to_mls_pressure(osiris_pressure, osiris_vmr):
     return nox_on_mls_levels, mls_levels
 
 
-def linearinterp(arr, altrange):
+def linearinterp2d(arr, altrange):
     """
     :param arr: 2d array with dimensions [alt, time]
     :param altrange: array of altitudes corresponding to alt dimension of arr

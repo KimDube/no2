@@ -7,6 +7,19 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 
 
+def get_median_filtered(signal, threshold=5):
+    signal = signal.copy()
+    difference = np.abs(signal - np.nanmedian(signal))
+    median_difference = np.nanmedian(difference)
+    if median_difference == 0:
+        s = 0
+    else:
+        s = difference / float(median_difference)
+    mask = s > threshold
+    signal[mask] = np.nanmedian(signal)
+    return signal
+
+
 def relative_anomaly(monthly_dataset):
     """
     Calculate relative anomaly.
